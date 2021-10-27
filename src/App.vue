@@ -1,28 +1,31 @@
 <template>
-  <div id="app">
-    <img alt="Vue logo" src="./assets/logo.png">
-    <HelloWorld msg="Welcome to Your Vue.js App"/>
-  </div>
+  <v-app id="app">
+    <Table></Table>
+  </v-app>
 </template>
 
 <script>
-import HelloWorld from './components/HelloWorld.vue'
+import Table from "./components/Table";
 
 export default {
-  name: 'App',
   components: {
-    HelloWorld
+    Table
+  },
+  created: async function () {
+
   }
 }
 </script>
 
-<style lang="less">
-#app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
-  margin-top: 60px;
+<style>
+.e-schedule .e-vertical-view .e-left-indent {
+  width: 165px !important;
+}
+.e-appointment {
+  width: 100%!important;
+}
+.e-schedule .e-vertical-view .e-time-cells-wrap table td, .e-schedule .e-vertical-view .e-work-cells {
+ min-height: 60px !important;
+height: 65px !important;
 }
 </style>
