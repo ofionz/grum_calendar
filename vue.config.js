@@ -1,6 +1,5 @@
 module.exports = {
     publicPath: './',
-    integrity: true,
     runtimeCompiler: true,
     transpileDependencies: ['vuetify'],
     configureWebpack: {

@@ -2,8 +2,9 @@
   <div>
     <ejs-schedule
         v-if="isInit"
+        :renderCell='onRenderCell'
         id='Schedule' height='550px' :locale='"ru"' :firstDayOfWeek='1'
-        :popupOpen='onPopupOpen'  :cellClick="onCellClick" :eventClick="onEventClick"
+        :popupOpen='onPopupOpen' :cellClick="onCellClick" :eventClick="onEventClick"
         :showTimeIndicator="false"
         ref="schedule"
         :startHour="startHour" :endHour="endHour" :eventSettings='eventSettings'
@@ -23,36 +24,112 @@
       <v-card v-if="modalState.show">
         <v-card-title class="d-flex flex-column">
           <span class="text-h5 ">{{ modalState.title }}</span>
-          <v-subheader v-if="modalState.date" class="d-flex flex-column">
-            <span>{{ modalState.MASTER.NAME + " " + modalState.MASTER.LAST_NAME }} </span><span>{{
-              modalState.date.getFullYear() + '/' + (1 + modalState.date.getMonth()) + "/" + modalState.date.getDate()
-            }}</span>
+          <v-subheader v-if="modalState.start" style="line-height: 1rem" class="d-flex flex-column">
+           <span>{{
+               modalState.start.getFullYear() + '/' + (1 + modalState.start.getMonth()) + "/" + modalState.start.getDate()
+             }}</span>
+            <span>{{
+                modalState.start.getHours() + ':' + (modalState.start.getMinutes() < 10 ? "0" + modalState.start.getMinutes() : modalState.start.getMinutes())
+              }}</span>
           </v-subheader>
 
         </v-card-title>
         <v-card-text>
           <v-container>
             <v-autocomplete
-                label="Клиент"
-                hint=""
-                :items="modalState.CLIENTS"
-            ></v-autocomplete>
-            <v-autocomplete
-                :items="modalState.PETS"
+                v-model="client"
+                :loading="loading"
+                :items="items"
+                @change="pet = ''; master= ''; service=''"
+                item-value="id"
+                item-text="phone"
+                :search-input.sync="search"
+                flat
+                hide-no-data
+                hide-details
+                label="Номер телефона клиента"
+
+            >
+              <template v-slot:selection="data">
+                <span class="mr-2"> {{ data.item.phone }}</span>
+                <span>  ({{ data.item.name }})</span>
+              </template>
+            </v-autocomplete>
+
+            <v-select
+                v-if="client"
+                :items="clients.find((el)=> el.id === client).pets"
+                v-model="pet"
+                item-value="id"
+                item-text="name"
                 label="Питомец"
                 hint=""
-            ></v-autocomplete>
-            <v-autocomplete
+                @change="changeServices"
+            ></v-select>
+
+            <v-select
+                v-if="pet"
                 label="Услуга"
                 hint=""
-                :items="modalState.SERVICES"
-            ></v-autocomplete>
+                item-text="name"
+                item-value="id"
+                v-model="service"
+                :items="services"
+                @change="changeMasters"
+            ></v-select>
             <v-autocomplete
+                v-if="service"
                 label="Мастер"
                 hint=""
-                :items="modalState.MASTERS"
+                v-model="master"
+                :items="masters"
+
             ></v-autocomplete>
 
+
+            <div class="d-flex align-center">
+              <v-slider
+                  v-if="master"
+                  class="mt-8"
+                  :thumb-size="32"
+                  v-model="duration"
+                  label="Длительность"
+                  min="0"
+                  max="240"
+                  thumb-color="primary"
+                  thumb-label="always"
+                  step="10"
+                  @end="isAssistentNeeded = false"
+
+              >
+                <template v-slot:thumb-label="props">
+               {{ calcHoursMin(props.value) }}
+                </template>
+              </v-slider>
+
+              <span v-if="master"
+                    class="ml-5">Окончание: {{ calcEnd(duration) }}</span>
+            </div>
+            <v-checkbox v-if="master" label="Необходим помошник" @change="range = [duration/2,duration]" v-model="isAssistentNeeded">
+
+            </v-checkbox>
+
+            <v-range-slider
+                class="mt-5"
+                v-if="isAssistentNeeded"
+                :thumb-size="32"
+                min="0"
+                :max="duration"
+                v-model="range"
+                step="10"
+                label="Время работы мастера"
+                thumb-label="always"
+            >
+              <template v-slot:thumb-label="props">
+                {{ calcEnd(props.value) }}
+              </template>
+
+            </v-range-slider>
 
           </v-container>
 
@@ -96,7 +173,7 @@
 import Vue from 'vue';
 import {SchedulePlugin, Day, Week, Month} from '@syncfusion/ej2-vue-schedule';
 import {loadCldr} from '@syncfusion/ej2-base';
-
+import {createElement} from '@syncfusion/ej2-base';
 
 loadCldr(
     require('cldr-data/supplemental/numberingSystems.json'),
@@ -123,23 +200,28 @@ var majorTemplateVue = Vue.component('TimeTemplate', {
 
 var eventTemplateVue = Vue.component('eventTemplate', {
   template: `
-    <div  style="white-space: normal; " @mouseenter="show" @mouseleave="close" class='template-wrap'>
+    <div style="white-space: normal; " @mouseenter="show" @mouseleave="close" class='template-wrap'>
+    <div>
+      <b>{{ data.PHONE }}</b>
+    </div>
     <div>
       <b>{{ $store.getters.getServiceByID(data.SERVICE_ID).NAME }}</b>
     </div>
-    <div class="py-1"> <span style="opacity: 0.8"> Мастер: {{ $store.getters.getMasterByID(data.MASTER_ID).NAME }}</span></div>
+    <div class=""><span style="opacity: 0.8"> Мастер: {{ $store.getters.getMasterByID(data.MASTER_ID).NAME }}</span>
+    </div>
 
-    <div class="py-1">
+    <div class="">
       <span style="opacity: 0.8">Клиент: {{ data.CLIENT }}</span>
     </div>
 
-    <div class="py-1">
+    <div class="">
       <span style="opacity: 0.8"> Питомец: {{ data.PET }}</span>
     </div>
 
     </div>`,
   data() {
     return {
+
       height: 20,
       data: {},
     };
@@ -148,12 +230,13 @@ var eventTemplateVue = Vue.component('eventTemplate', {
 
   mounted() {
 
-    let id = '"Appointment_'+this.data.ID+'"'
+    let id = '"Appointment_' + this.data.ID + '"'
     id = `[data-id=${id}]`;
 
-    setTimeout(()=> {if(document.querySelector(id))
-    document.querySelector(id).style.backgroundColor = this.$store.getters.getMasterByID(this.data.MASTER_ID).COLOR
-  }, 0)
+    setTimeout(() => {
+      if (document.querySelector(id))
+        document.querySelector(id).style.backgroundColor = this.$store.getters.getMasterByID(this.data.MASTER_ID).COLOR
+    }, 0)
     //
     // setTimeout(()=>this.$refs.wrap.parentElement.parentElement.style.backgroundColor= this.$store.getters.getMasterByID(this.data.MASTER_ID).COLOR, 0)
   },
@@ -182,15 +265,48 @@ export default {
     schedule: [Day, Week, Month]
   },
   components: {},
+  computed: {},
   data() {
     return {
+      isAssistentNeeded: false,
+      range: [ 0, 0],
+      duration: 0,
+      services: [],
+      loading: false,
+      items: [],
+      search: null,
+      masters: [],
+      clients: [
+        {
+          phone: '+7 911 11111111', name: "Василий", id: '1', pets: [
+            {id: '1', name: 'Тузик (пудель)'},
+            {id: '2', name: "Мурзик (кот)"}
+
+          ]
+        },
+        {
+          phone: '8 981 22222222', name: "Мария", id: '2', pets: [
+            {id: '3', name: 'Гена (крокодил)'}
+          ]
+        },
+        {
+          phone: '981 33333333', name: "Елена", id: '3', pets: [
+            {id: '4', name: 'Жужа (слон)'}
+          ]
+        },
+      ],
+
+
       majorSlotTemplate: function (e) {
         return {template: majorTemplateVue}
       },
 
       isInit: false,
       isEditable: false,
-      curElem: {},
+      pet: '',
+      client: '',
+      service: '',
+      master: '',
       modalState: {
         show: false,
         MASTER: {},
@@ -214,9 +330,95 @@ export default {
       }
     }
   },
-
+  watch: {
+    search(val) {
+      val && val !== this.client && this.querySelections(val)
+    },
+  },
   methods: {
 
+    calcHoursMin(min) {
+      min = Number(min)
+      var h = Math.floor(min / 60);
+      var m = Math.floor(min % 60);
+      var hDisplay = h > 0 ? h + ':' : "";
+      var mDisplay = m > 0 ? m  : "00";
+      if (!h && !m) {
+        return 0
+      }
+      return hDisplay + mDisplay;
+    },
+    calcEnd(time) {
+      let res = new Date(this.modalState.start);
+      res.setMinutes(res.getMinutes() + time);
+
+      return res.getHours() + ':' + (res.getMinutes() < 10 ? "0" + res.getMinutes() : res.getMinutes());
+    },
+    onRenderCell(argr) {
+      if (argr.elementType === "monthCells") {
+        let ele = createElement('div', {
+          innerHTML: "Мастер №" + (Math.floor(Math.random() * 3) + 1),
+          className: 'templatewrap'
+        });
+        (argr.element).appendChild(ele);
+      }
+
+    },
+    changeMasters() {
+      this.master = '';
+      this.masters = [];
+      switch (this.service) {
+        case "1":
+        case "2":
+        case "4":
+        case "5":
+          this.masters = ['Мастер по пуделям и кошкам', "Мастер по всем"];
+          break;
+        case "7":
+        case "8":
+          this.masters = ["Мастер по крокодилам", "Мастер по всем"];
+          break;
+        case "9":
+        case "10":
+          this.masters = ["Мастер по слонам", "Мастер по всем"];
+          break;
+
+      }
+    },
+    changeServices() {
+      this.master = '';
+      this.service = '';
+      this.masters = [];
+      switch (this.pet) {
+        case "1":
+          this.services = [{id: '1', name: 'Стрижка пуделя'}, {id: '2', name: "Мойка пуделя"}, {
+            id: '3',
+            name: "Комплекс"
+          }];
+          break;
+        case "2":
+          this.services = [{id: '4', name: "Стрижка кошки"}, {id: '5', name: "Мойка кошки"}, {
+            id: '6',
+            name: "Маникюр"
+          }];
+          break;
+        case "3":
+          this.services = [{id: '7', name: 'Чесание хвоста'}, {id: '8', name: "Чистка зубов"}];
+          break;
+        case "4":
+          this.services = [{id: '9', name: "Завивка хобота"}, {id: '10', name: "Завивка хвоста"}];
+          break;
+      }
+    },
+    querySelections(v) {
+      this.loading = true
+      setTimeout(() => {
+        this.items = this.clients.filter(e => {
+          return (e.phone || '').toLowerCase().indexOf((v || '').toLowerCase()) > -1
+        })
+        this.loading = false
+      }, 300)
+    },
     async deleteElem() {
       if (await this.$store.dispatch('deleteEvent', this.curElem.ID)) {
         this.$refs.schedule.deleteEvent(this.curElem.ID);
@@ -279,7 +481,7 @@ export default {
       }
     },
     onCellClick(event) {
-
+      console.log(event)
       this.curElem = {}
       if (!event.isAllDay) {
 
@@ -287,11 +489,7 @@ export default {
         this.modalState = {
           show: true,
           title: "Добавить",
-          MASTERS: [1, 2, 3, 4, 5],
-          CLIENTS: [1, 2, 3, 4, 5],
-          PETS: [1, 2, 3, 4, 5],
-          SERVICES: [1, 2, 3, 4, 5],
-
+          start: event.startTime
         };
       }
     },
@@ -318,11 +516,7 @@ export default {
       return args
 
     },
-    calcHourView(index) {
-      let hours = Math.floor(index / 60);
-      let minutes = index % 60;
-      return `${hours}:${minutes}`;
-    }
+
   },
 
   mounted: async function () {

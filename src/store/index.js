@@ -185,6 +185,7 @@ export default new Vuex.Store({
                         SERVICE_ID: "2",
                         MASTER_ID: "1",
                         CLIENT: "Сергей",
+                        PHONE: "+79800000990",
                         PET: "Артемон",
                     },
                     {
@@ -194,6 +195,8 @@ export default new Vuex.Store({
                         SERVICE_ID: "3",
                         MASTER_ID: "2",
                         CLIENT: "Татьяна",
+                        PHONE: "+79800111990",
+
                         PET: "Тузик",
                     },
                     {
@@ -203,6 +206,8 @@ export default new Vuex.Store({
                         SERVICE_ID: "4",
                         MASTER_ID: "3",
                         CLIENT: "Василий",
+                        PHONE: "+798222343990",
+
                         PET: "Бобик",
                     },
 

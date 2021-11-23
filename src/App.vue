@@ -44,7 +44,9 @@ export default {
 </script>
 
 <style>
-
+html {
+  overflow: unset !important;
+}
 .e-schedule .e-vertical-view .e-left-indent {
   width: 165px !important;
 }
