@@ -4,9 +4,10 @@
         v-if="isInit"
         :renderCell='onRenderCell'
         id='Schedule' height='550px' :locale='"ru"' :firstDayOfWeek='1'
-        :popupOpen='onPopupOpen' :cellClick="onCellClick" :eventClick="onEventClick"
+        :popupOpen='onPopupOpen' :cellClick="onCellClick" :cellDoubleClick="onDoubleCellClick"  :eventClick="onEventClick"
         :showTimeIndicator="false"
         ref="schedule"
+        :dateHeaderTemplate='dateHeaderTemplate'
         :startHour="startHour" :endHour="endHour" :eventSettings='eventSettings'
         :timeScale='timeScale'>
       <e-views>
@@ -15,156 +16,11 @@
         <e-view option='Month' dateFormat='dd-MMM-yyyy'></e-view>
       </e-views>
     </ejs-schedule>
+    <EventModal v-if="modalState.show" @addEvent="addEvent" @changeModal="onDoubleCellClick" @deleteEvent="deleteEvent"
+                :modal-state="modalState"></EventModal>
+    <NoteModal v-if="noteModalState.show" @addEvent="addEvent" @changeModal="onCellClick"  @deleteEvent="deleteEvent"
+                :modal-state="noteModalState"></NoteModal>
 
-
-    <v-dialog
-        v-model="modalState.show"
-        max-width="600px"
-    >
-      <v-card v-if="modalState.show">
-        <v-card-title class="d-flex flex-column">
-          <span class="text-h5 ">{{ modalState.title }}</span>
-          <v-subheader v-if="modalState.start" style="line-height: 1rem" class="d-flex flex-column">
-           <span>{{
-               modalState.start.getFullYear() + '/' + (1 + modalState.start.getMonth()) + "/" + modalState.start.getDate()
-             }}</span>
-            <span>{{
-                modalState.start.getHours() + ':' + (modalState.start.getMinutes() < 10 ? "0" + modalState.start.getMinutes() : modalState.start.getMinutes())
-              }}</span>
-          </v-subheader>
-
-        </v-card-title>
-        <v-card-text>
-          <v-container>
-            <v-autocomplete
-                v-model="client"
-                :loading="loading"
-                :items="items"
-                @change="pet = ''; master= ''; service=''"
-                item-value="id"
-                item-text="phone"
-                :search-input.sync="search"
-                flat
-                hide-no-data
-                hide-details
-                label="Номер телефона клиента"
-
-            >
-              <template v-slot:selection="data">
-                <span class="mr-2"> {{ data.item.phone }}</span>
-                <span>  ({{ data.item.name }})</span>
-              </template>
-            </v-autocomplete>
-
-            <v-select
-                v-if="client"
-                :items="clients.find((el)=> el.id === client).pets"
-                v-model="pet"
-                item-value="id"
-                item-text="name"
-                label="Питомец"
-                hint=""
-                @change="changeServices"
-            ></v-select>
-
-            <v-select
-                v-if="pet"
-                label="Услуга"
-                hint=""
-                item-text="name"
-                item-value="id"
-                v-model="service"
-                :items="services"
-                @change="changeMasters"
-            ></v-select>
-            <v-autocomplete
-                v-if="service"
-                label="Мастер"
-                hint=""
-                v-model="master"
-                :items="masters"
-
-            ></v-autocomplete>
-
-
-            <div class="d-flex align-center">
-              <v-slider
-                  v-if="master"
-                  class="mt-8"
-                  :thumb-size="32"
-                  v-model="duration"
-                  label="Длительность"
-                  min="0"
-                  max="240"
-                  thumb-color="primary"
-                  thumb-label="always"
-                  step="10"
-                  @end="isAssistentNeeded = false"
-
-              >
-                <template v-slot:thumb-label="props">
-               {{ calcHoursMin(props.value) }}
-                </template>
-              </v-slider>
-
-              <span v-if="master"
-                    class="ml-5">Окончание: {{ calcEnd(duration) }}</span>
-            </div>
-            <v-checkbox v-if="master" label="Необходим помошник" @change="range = [duration/2,duration]" v-model="isAssistentNeeded">
-
-            </v-checkbox>
-
-            <v-range-slider
-                class="mt-5"
-                v-if="isAssistentNeeded"
-                :thumb-size="32"
-                min="0"
-                :max="duration"
-                v-model="range"
-                step="10"
-                label="Время работы мастера"
-                thumb-label="always"
-            >
-              <template v-slot:thumb-label="props">
-                {{ calcEnd(props.value) }}
-              </template>
-
-            </v-range-slider>
-
-          </v-container>
-
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn
-              :disabled="!isEditable"
-              color="red darken-1"
-              text
-              v-if="curElem.ID "
-              @click="deleteElem"
-          >
-            {{ "Удалить" }}
-          </v-btn>
-          <v-btn
-              :disabled="!curElem.SALON_ID || !isEditable"
-              color="green darken-1"
-              text
-
-              @click="curElem.ID?updateElem():saveElem()"
-          >
-            {{ curElem.ID ? "Изменить" : "Добавить" }}
-          </v-btn>
-          <v-btn
-              color="blue darken-1"
-              text
-              @click="modalState.show = false"
-          >
-            Закрыть
-          </v-btn>
-
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
 
   </div>
 </template>
@@ -174,6 +30,8 @@ import Vue from 'vue';
 import {SchedulePlugin, Day, Week, Month} from '@syncfusion/ej2-vue-schedule';
 import {loadCldr} from '@syncfusion/ej2-base';
 import {createElement} from '@syncfusion/ej2-base';
+import EventModal from "./EventModal";
+import NoteModal from "./NoteModal";
 
 loadCldr(
     require('cldr-data/supplemental/numberingSystems.json'),
@@ -197,51 +55,82 @@ var majorTemplateVue = Vue.component('TimeTemplate', {
   }
 });
 
+var eventTooltipTemplateVue = Vue.component('eventTooltipTemplate', {
 
-var eventTemplateVue = Vue.component('eventTemplate', {
-  template: `
-    <div style="white-space: normal; " @mouseenter="show" @mouseleave="close" class='template-wrap'>
-    <div>
-      <b>{{ data.PHONE }}</b>
-    </div>
-    <div>
-      <b>{{ $store.getters.getServiceByID(data.SERVICE_ID).NAME }}</b>
-    </div>
-    <div class=""><span style="opacity: 0.8"> Мастер: {{ $store.getters.getMasterByID(data.MASTER_ID).NAME }}</span>
-    </div>
-
-    <div class="">
-      <span style="opacity: 0.8">Клиент: {{ data.CLIENT }}</span>
-    </div>
-
-    <div class="">
-      <span style="opacity: 0.8"> Питомец: {{ data.PET }}</span>
-    </div>
-
-    </div>`,
+  render() {
+    if (this.data.type === 'event') {
+      return <div className='tooltip-wrap'>
+        <div className='time'>Начало : {this.data.StartTime.toLocaleString()} </div>
+        <div className='time'>Конец : {this.data.EndTime.toLocaleString()} </div>
+        <div>Клиент: {this.data.client.phone + ' (' + this.data.client.name + ')'}</div>
+        <div>
+          Услуги:
+          {this.data.service.map((elem, index) => {
+            return <span key={index}>{elem.name} </span>
+          })}
+        </div>
+        <div> Мастер: {this.data.master.name}</div>
+        <div> Питомец: {this.data.pet.name + ' (' + this.data.pet.breed + ')'}</div>
+      </div>
+    } else return <div style="line-height: 10px; padding-top: 2px; display: flex; flex-direction: column" class="d-flex flex-column">
+      <div   style="margin-bottom: 3px" class='time'>Начало : {this.data.StartTime.toLocaleString()} </div>
+      <div  style="margin-bottom: 3px" class='time'>Конец : {this.data.EndTime.toLocaleString()} </div>
+      <span  style="margin-bottom: 3px">Заголовок: {this.data.title}</span>
+      <span>Текст: {this.data.description}</span>
+    </div>;
+  },
   data() {
     return {
+      data: {}
+    };
+  },
 
+});
+
+
+var eventTemplateVue = Vue.component('eventTemplate', {
+// <hr style="position: absolute; top: 64%;width: 100%;">
+  data() {
+    return {
+      isshow: false,
       height: 20,
       data: {},
     };
-
   },
+
 
   mounted() {
 
-    let id = '"Appointment_' + this.data.ID + '"'
+    let id = '"Appointment_' + this.data.id + '"'
     id = `[data-id=${id}]`;
 
     setTimeout(() => {
-      if (document.querySelector(id))
-        document.querySelector(id).style.backgroundColor = this.$store.getters.getMasterByID(this.data.MASTER_ID).COLOR
+      if (document.querySelector(id) && this.data.master && this.data.master.color) {
+        document.querySelector(id).style.backgroundColor = this.data.master.color;
+      } else if (document.querySelector(id) && this.data.type === 'note') {
+        document.querySelector(id).style.backgroundColor = '#f0f800';
+      }
     }, 0)
-    //
-    // setTimeout(()=>this.$refs.wrap.parentElement.parentElement.style.backgroundColor= this.$store.getters.getMasterByID(this.data.MASTER_ID).COLOR, 0)
+
   },
   methods: {
+    makeLightColor(clr) {
+      if (!clr) return
+      var shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+      clr = clr.replace(shorthandRegex, function (m, r, g, b) {
+        return r + r + g + g + b + b;
+      });
+      var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(clr);
+      result = {
+        r: Math.floor(parseInt(result[1], 16) + parseInt(result[1], 16) * 0.2),
+        g: Math.floor(parseInt(result[2], 16) + parseInt(result[2], 16) * 0.2),
+        b: Math.floor(parseInt(result[3], 16) + parseInt(result[3], 16) * 0.2)
+      };
+      return `rgb(${result.r > 255 ? 255 : result.r}, ${result.g > 255 ? 255 : result.g}, ${result.b > 255 ? 255 : result.b})`;
+    },
     show(ev) {
+      this.isshow = true;
+      ev.target.parentNode.parentNode.style.overflow = 'unset';
       if (ev.target.clientHeight > ev.target.parentNode.parentNode.clientHeight) {
         ev.target.parentNode.parentNode.style.zIndex = 2000;
         this.height = ev.target.parentNode.parentNode.style.height;
@@ -250,12 +139,58 @@ var eventTemplateVue = Vue.component('eventTemplate', {
 
     },
     close(ev) {
+      this.isshow = false;
+      ev.target.parentNode.parentNode.style.overflow = 'hidden';
+
+      // ev.target.parentNode.style.height = '100%';
       ev.target.parentNode.parentNode.style.zIndex = '';
       ev.target.parentNode.parentNode.style.height = this.height;
     },
+  },
+  render() {
+    if (this.data.type === 'event') {
+      return <div
+          style={"white-space: normal; border-bottom: #fff solid 1px; height:100%; background-color: " + this.makeLightColor(this.data.master.color)}
+          class='template-wrap'>
+        <div style="line-height: 9px; padding-top: 2px" class="d-flex flex-column">
+          <b>{this.data.client.phone + ' (' + this.data.client.name + ')'}</b>
+          {this.data.service.map((elem, index) => {
+            return <b key={index}>{elem.name} </b>
+          })}
+        </div>
+      </div>
+    } else return <div style="line-height: 9px; padding-top: 2px; font-size: 8px; white-space: break-spaces;" class="d-flex flex-column">
+      <span>{this.data.title}</span>
+      <span style="margin-top: 4px">{this.data.description}</span>
+    </div>;
+  },
+});
+
+// <div className="e-header-day">Чт</div>
+// <div className="e-header-date e-navigate" role="link">25</div>
+var dateHeaderTemplateVue = Vue.component('demo', {
+  template: ' <div class="d-flex "> <div class="e-header-date e-navigate mr-2" role="link"><span>{{data.date.getDate()}}</span>' +
+      ' <span style="font-size: 10px">{{getDateHeaderText()}}</span>' +
+      '</div> <div class="d-flex flex-column" style="line-height: 10px; font-size: 9px">' +
+      '<div v-for="(row, index) in  rows" class="d-flex flex-column  master-field" >    <span class="master-field-square" :style="`background-color:`+ row.color"></span> <span  >{{row.name}}</span> <span v-if="row.assistant" >{{row.assistant}}</span><span class="master-field-underline" :style="`border-bottom: 1px solid `+ row.color"></span></div>' + '</div></div>',
+  data() {
+    return {
+      data: {},
+      rows: []
+    };
+  },
+  created() {
+    this.rows = this.$store.getters.getHeadElem(this.data.date);
+  },
+  methods: {
+
+    getDateHeaderText: function () {
+      let days = ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'];
+      return days[this.data.date.getDay()];
+
+    },
+
   }
-
-
 });
 
 
@@ -264,53 +199,23 @@ export default {
   provide: {
     schedule: [Day, Week, Month]
   },
-  components: {},
+  components: {EventModal, NoteModal},
   computed: {},
   data() {
     return {
-      isAssistentNeeded: false,
-      range: [ 0, 0],
-      duration: 0,
-      services: [],
-      loading: false,
-      items: [],
-      search: null,
-      masters: [],
-      clients: [
-        {
-          phone: '+7 911 11111111', name: "Василий", id: '1', pets: [
-            {id: '1', name: 'Тузик (пудель)'},
-            {id: '2', name: "Мурзик (кот)"}
-
-          ]
-        },
-        {
-          phone: '8 981 22222222', name: "Мария", id: '2', pets: [
-            {id: '3', name: 'Гена (крокодил)'}
-          ]
-        },
-        {
-          phone: '981 33333333', name: "Елена", id: '3', pets: [
-            {id: '4', name: 'Жужа (слон)'}
-          ]
-        },
-      ],
-
-
+      modalState: {
+        show: false,
+      },
+      noteModalState: {
+        show: false,
+      },
+      dateHeaderTemplate: function (e) {
+        return {template: dateHeaderTemplateVue}
+      },
       majorSlotTemplate: function (e) {
         return {template: majorTemplateVue}
       },
-
       isInit: false,
-      isEditable: false,
-      pet: '',
-      client: '',
-      service: '',
-      master: '',
-      modalState: {
-        show: false,
-        MASTER: {},
-      },
       startHour: '09:00',
       endHour: '21:00',
       timeScale: {
@@ -319,211 +224,115 @@ export default {
         slotCount: 6
       },
 
-
       eventSettings: {
         template: function (e) {
           return {
             template: eventTemplateVue
           };
         },
-        dataSource: undefined
+        dataSource: undefined,
+        enableTooltip: true,
+        tooltipTemplate: function (e) {
+          return {
+            template: eventTooltipTemplateVue
+          };
+        }
       }
     }
   },
-  watch: {
-    search(val) {
-      val && val !== this.client && this.querySelections(val)
-    },
-  },
+
   methods: {
-
-    calcHoursMin(min) {
-      min = Number(min)
-      var h = Math.floor(min / 60);
-      var m = Math.floor(min % 60);
-      var hDisplay = h > 0 ? h + ':' : "";
-      var mDisplay = m > 0 ? m  : "00";
-      if (!h && !m) {
-        return 0
-      }
-      return hDisplay + mDisplay;
+    addEvent(data) {
+      this.$refs.schedule.addEvent(data)
+      this.modalState = {};
+      this.modalState.show = false;
     },
-    calcEnd(time) {
-      let res = new Date(this.modalState.start);
-      res.setMinutes(res.getMinutes() + time);
-
-      return res.getHours() + ':' + (res.getMinutes() < 10 ? "0" + res.getMinutes() : res.getMinutes());
+    deleteEvent(data) {
+      this.$refs.schedule.deleteEvent(data.Id);
+      let index = this.eventSettings.dataSource.indexOf(this.eventSettings.dataSource.find(elem => elem.Id === data.Id));
+      if (index > -1) {
+        this.eventSettings.dataSource.splice(index, 1);
+      }
+      this.modalState = {};
+      this.modalState.show = false;
     },
     onRenderCell(argr) {
       if (argr.elementType === "monthCells") {
-        let ele = createElement('div', {
-          innerHTML: "Мастер №" + (Math.floor(Math.random() * 3) + 1),
-          className: 'templatewrap'
-        });
-        (argr.element).appendChild(ele);
-      }
-
-    },
-    changeMasters() {
-      this.master = '';
-      this.masters = [];
-      switch (this.service) {
-        case "1":
-        case "2":
-        case "4":
-        case "5":
-          this.masters = ['Мастер по пуделям и кошкам', "Мастер по всем"];
-          break;
-        case "7":
-        case "8":
-          this.masters = ["Мастер по крокодилам", "Мастер по всем"];
-          break;
-        case "9":
-        case "10":
-          this.masters = ["Мастер по слонам", "Мастер по всем"];
-          break;
-
-      }
-    },
-    changeServices() {
-      this.master = '';
-      this.service = '';
-      this.masters = [];
-      switch (this.pet) {
-        case "1":
-          this.services = [{id: '1', name: 'Стрижка пуделя'}, {id: '2', name: "Мойка пуделя"}, {
-            id: '3',
-            name: "Комплекс"
-          }];
-          break;
-        case "2":
-          this.services = [{id: '4', name: "Стрижка кошки"}, {id: '5', name: "Мойка кошки"}, {
-            id: '6',
-            name: "Маникюр"
-          }];
-          break;
-        case "3":
-          this.services = [{id: '7', name: 'Чесание хвоста'}, {id: '8', name: "Чистка зубов"}];
-          break;
-        case "4":
-          this.services = [{id: '9', name: "Завивка хобота"}, {id: '10', name: "Завивка хвоста"}];
-          break;
-      }
-    },
-    querySelections(v) {
-      this.loading = true
-      setTimeout(() => {
-        this.items = this.clients.filter(e => {
-          return (e.phone || '').toLowerCase().indexOf((v || '').toLowerCase()) > -1
+        argr.element.classList.add('MonthCell')
+        let head = this.$store.getters.getHeadElem(argr.date)
+        if (!head.length) return
+        let cont = createElement('div', {
+          className: 'd-flex flex-column head-cont'
         })
-        this.loading = false
-      }, 300)
-    },
-    async deleteElem() {
-      if (await this.$store.dispatch('deleteEvent', this.curElem.ID)) {
-        this.$refs.schedule.deleteEvent(this.curElem.ID);
-        this.$store.commit("deleteElem", this.curElem.ID);
-        let index = this.eventSettings.dataSource.indexOf(this.eventSettings.dataSource.find(elem => elem.Id === this.curElem.ID));
-        this.modalState = {};
-        this.modalState.show = false;
-        if (index > -1) {
-          this.eventSettings.dataSource.splice(index, 1);
-        }
-      }
-    },
-    async saveElem() {
-      let payload = {
-        DATE: this.curElem.DATE.getFullYear() + "-" + (1 + this.curElem.DATE.getMonth()) + "-" + this.curElem.DATE.getDate() + 'T00:00:00.000Z',
-        MASTER_ID: this.curElem.MASTER_ID,
-        SALON_ID: this.curElem.SALON_ID,
-        SERVICE_ID: this.curElem.SERVICE_ID != '0' ? this.curElem.SERVICE_ID : '',
+        head.forEach((el) => {
+          let ele = createElement('div', {
+            innerHTML: `<span class="master-field-square" style="background-color: ${el.color}"> <span style="padding-left: 10px">${el.name}</span></span> ` + (el.assistant ? (`<span style="padding-left: 10px;padding-top: 2px;">${el.assistant}</span>`) : "") + `<span class="master-field-underline" style="margin-bottom: 3px; margin-top: 3px; border-bottom: 1px solid ${el.color}"></span>`,
+            className: 'd-flex flex-column '
+          });
+          cont.appendChild(ele);
+        })
+
+        argr.element.appendChild(cont);
+
       }
 
-      let id = await this.$store.dispatch('addEvent', payload);
-      if (id) {
-        payload.Id = id;
-        payload.ID = id;
-        payload.Subject = id;
-        payload.StartTime = new Date(this.curElem.DATE);
-        payload.EndTime = new Date(this.curElem.DATE.getTime() + 60000)
-        this.$refs.schedule.addEvent(payload);
-        this.$store.commit("addElem", payload);
-        this.modalState = {}
-        this.modalState.show = false;
-      }
-    },
-    async updateElem() {
 
-      let payload = {
-        ID: this.curElem.ID,
-        DATE: this.curElem.DATE.getFullYear() + "-" + (1 + this.curElem.DATE.getMonth()) + "-" + this.curElem.DATE.getDate() + 'T00:00:00.000Z',
-        MASTER_ID: this.curElem.MASTER_ID,
-        SALON_ID: this.curElem.SALON_ID,
-        SERVICE_ID: this.curElem.SERVICE_ID != '0' ? this.curElem.SERVICE_ID : '',
-      }
-      let result = await this.$store.dispatch('updateEvent', payload);
-      if (result) {
-        this.$refs.schedule.deleteEvent(this.curElem.ID);
-        this.$store.commit("deleteElem", this.curElem.ID);
-        let index = this.eventSettings.dataSource.indexOf(this.eventSettings.dataSource.find(elem => elem.Id === this.curElem.ID));
-        if (index > -1) {
-          this.eventSettings.dataSource.splice(index, 1);
-        }
-        payload.Id = this.curElem.ID;
-        payload.ID = this.curElem.ID;
-        payload.Subject = this.curElem.ID;
-        payload.StartTime = new Date(this.curElem.DATE);
-        payload.EndTime = new Date(this.curElem.DATE.getTime() + 60000)
-        this.$refs.schedule.addEvent(payload);
-        this.$store.commit("addElem", payload);
-        this.modalState = {}
-        this.modalState.show = false;
-      }
     },
+
     onCellClick(event) {
-      console.log(event)
-      this.curElem = {}
-      if (!event.isAllDay) {
 
+      if (!event.isAllDay ) {
         // this.eventSettings.dataSource.find((el) => new Date(el.StartTime).toString() === start.toString())
+        this.noteModalState = {show: false}
         this.modalState = {
           show: true,
-          title: "Добавить",
-          start: event.startTime
+          title: "Запись клиента",
+          start: event.startTime ?event.startTime : event.start
+        };
+      }
+    },
+    onDoubleCellClick(event) {
+
+      if (!event.isAllDay) {
+        // this.eventSettings.dataSource.find((el) => new Date(el.StartTime).toString() === start.toString())
+        this.modalState = {show: false}
+        this.noteModalState = {
+          show: true,
+          title: "Добавить заметку",
+          start:  event.startTime ?event.startTime : event.start
         };
       }
     },
     onEventClick(ev) {
-      this.curElem = {
-        DATE: ev.event.StartTime,
-        ID: ev.event.ID,
-        SERVICE_ID: ev.event.SERVICE_ID,
-        SALON_ID: ev.event.SALON_ID,
-        MASTER_ID: ev.event.MASTER_ID,
+
+      if(ev.event.type === 'event'){
+        this.modalState = {
+          show: true,
+          title: "Подробности",
+          date: ev.event.StartTime,
+          ...ev.event
+        };
+      }
+      else if(ev.event.type === 'note'){
+        this.noteModalState = {
+          show: true,
+          title: "Заметка",
+          date: ev.event.StartTime,
+          ...ev.event
+        };
       }
 
-      let assistants = ev.event.SERVICE_ID ? [this.$store.getters.getServiceByID(ev.event.SERVICE_ID)].concat(this.$store.getters.getFreeAssistant(ev.event.StartTime)) : this.$store.getters.getFreeAssistant(ev.event.StartTime);
-
-      this.modalState = {
-        show: true,
-        title: "Подробности",
-        MASTER: this.$store.getters.getMasterByID(ev.event.MASTER_ID),
-        date: ev.event.StartTime
-      };
     },
     onPopupOpen: function (args) {
       args.cancel = true;
       return args
 
     },
-
   },
 
   mounted: async function () {
-    this.$store.dispatch('fetchData').then(() => {
-      // this.endHour = this.calcHourView(this.$store.state.data.MASTERS.length)
-      this.eventSettings.dataSource = this.$store.state.data.SCHEDULE
-      this.isEditable = this.$store.state.data.EDIT_RIGHTS
+    await this.$store.getters.getPromiseEvents().then(() => {
+      this.eventSettings.dataSource = this.$store.state.data
       this.isInit = true;
     }).then(() => {
       Array.from(document.getElementsByClassName('e-tbar-btn-text')).find((el) => el.textContent === 'Today').textContent = "Сегодня";
@@ -534,9 +343,7 @@ export default {
       scheduleObj.timeScale.majorSlotTemplate = this.majorSlotTemplate;
       scheduleObj.dataBind();
 
-    });
-
-
+    })
   }
 
 

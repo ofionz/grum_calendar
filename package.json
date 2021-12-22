@@ -11,6 +11,7 @@
     "vue": "^2.6.11",
     "vuetify": "^2.4.0",
     "vuex": "^3.4.0",
+    "v-mask": "^2.2.4",
     "@syncfusion/ej2-vue-schedule": "^19.3.46",
     "cldr-data": "^36.0.0"
   },

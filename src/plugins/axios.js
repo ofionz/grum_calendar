@@ -22,19 +22,22 @@ _axios.interceptors.request.use(
     return config;
   },
   function(error) {
-    // Do something with request error
     return Promise.reject(error);
   }
 );
 
-// Add a response interceptor
+
 _axios.interceptors.response.use(
   function(response) {
-    // Do something with response data
+
+  if (response.data.error) {
+    Vue.prototype.$event_bus.$emit('error', response.data.error)
+  }
+
     return response;
   },
   function(error) {
-    // Do something with response error
+    Vue.prototype.$event_bus.$emit('error', error)
     return Promise.reject(error);
   }
 );
