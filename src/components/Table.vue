@@ -4,12 +4,16 @@
         v-if="isInit"
         :renderCell='onRenderCell'
         id='Schedule' height='550px' :locale='"ru"' :firstDayOfWeek='1'
-        :popupOpen='onPopupOpen' :cellClick="onCellClick" :cellDoubleClick="onDoubleCellClick"  :eventClick="onEventClick"
+        :popupOpen='onPopupOpen' :cellClick="onCellClick" :cellDoubleClick="onDoubleCellClick"
+        :navigating="onDateChange" :eventClick="onEventClick"
+        :dragStop="onDrag"
         :showTimeIndicator="false"
         ref="schedule"
         :dateHeaderTemplate='dateHeaderTemplate'
         :startHour="startHour" :endHour="endHour" :eventSettings='eventSettings'
-        :timeScale='timeScale'>
+        :timeScale='timeScale'
+
+    >
       <e-views>
         <e-view option='Day' dateFormat='dd-MMM-yyyy'></e-view>
         <e-view option='Week' dateFormat='dd-MMM-yyyy'></e-view>
@@ -18,8 +22,8 @@
     </ejs-schedule>
     <EventModal v-if="modalState.show" @addEvent="addEvent" @changeModal="onDoubleCellClick" @deleteEvent="deleteEvent"
                 :modal-state="modalState"></EventModal>
-    <NoteModal v-if="noteModalState.show" @addEvent="addEvent" @changeModal="onCellClick"  @deleteEvent="deleteEvent"
-                :modal-state="noteModalState"></NoteModal>
+    <NoteModal v-if="noteModalState.show" @addEvent="addEvent" @changeModal="onCellClick" @deleteEvent="deleteEvent"
+               :modal-state="noteModalState"></NoteModal>
 
 
   </div>
@@ -27,7 +31,7 @@
 
 <script>
 import Vue from 'vue';
-import {SchedulePlugin, Day, Week, Month} from '@syncfusion/ej2-vue-schedule';
+import {SchedulePlugin, Day, Week, Month, DragAndDrop, DragEventArgs} from '@syncfusion/ej2-vue-schedule';
 import {loadCldr} from '@syncfusion/ej2-base';
 import {createElement} from '@syncfusion/ej2-base';
 import EventModal from "./EventModal";
@@ -72,10 +76,11 @@ var eventTooltipTemplateVue = Vue.component('eventTooltipTemplate', {
         <div> Мастер: {this.data.master.name}</div>
         <div> Питомец: {this.data.pet.name + ' (' + this.data.pet.breed + ')'}</div>
       </div>
-    } else return <div style="line-height: 10px; padding-top: 2px; display: flex; flex-direction: column" class="d-flex flex-column">
-      <div   style="margin-bottom: 3px" class='time'>Начало : {this.data.StartTime.toLocaleString()} </div>
-      <div  style="margin-bottom: 3px" class='time'>Конец : {this.data.EndTime.toLocaleString()} </div>
-      <span  style="margin-bottom: 3px">Заголовок: {this.data.title}</span>
+    } else return <div style="line-height: 10px; padding-top: 2px; display: flex; flex-direction: column"
+                       class="d-flex flex-column">
+      <div style="margin-bottom: 3px" class='time'>Начало : {this.data.StartTime.toLocaleString()} </div>
+      <div style="margin-bottom: 3px" class='time'>Конец : {this.data.EndTime.toLocaleString()} </div>
+      <span style="margin-bottom: 3px">Заголовок: {this.data.title}</span>
       <span>Текст: {this.data.description}</span>
     </div>;
   },
@@ -105,9 +110,11 @@ var eventTemplateVue = Vue.component('eventTemplate', {
     id = `[data-id=${id}]`;
 
     setTimeout(() => {
+
       if (document.querySelector(id) && this.data.master && this.data.master.color) {
         document.querySelector(id).style.backgroundColor = this.data.master.color;
       } else if (document.querySelector(id) && this.data.type === 'note') {
+
         document.querySelector(id).style.backgroundColor = '#f0f800';
       }
     }, 0)
@@ -159,7 +166,8 @@ var eventTemplateVue = Vue.component('eventTemplate', {
           })}
         </div>
       </div>
-    } else return <div style="line-height: 9px; padding-top: 2px; font-size: 8px; white-space: break-spaces;" class="d-flex flex-column">
+    } else return <div style="line-height: 9px; padding-top: 2px; font-size: 8px; white-space: break-spaces;"
+                       class="d-flex flex-column">
       <span>{this.data.title}</span>
       <span style="margin-top: 4px">{this.data.description}</span>
     </div>;
@@ -197,7 +205,7 @@ var dateHeaderTemplateVue = Vue.component('demo', {
 export default {
   name: 'app',
   provide: {
-    schedule: [Day, Week, Month]
+    schedule: [Day, Week, Month, DragAndDrop]
   },
   components: {EventModal, NoteModal},
   computed: {},
@@ -246,6 +254,8 @@ export default {
       this.$refs.schedule.addEvent(data)
       this.modalState = {};
       this.modalState.show = false;
+      this.noteModalState = {};
+      this.noteModalState.show = false;
     },
     deleteEvent(data) {
       this.$refs.schedule.deleteEvent(data.Id);
@@ -255,6 +265,8 @@ export default {
       }
       this.modalState = {};
       this.modalState.show = false;
+      this.noteModalState = {};
+      this.noteModalState.show = false;
     },
     onRenderCell(argr) {
       if (argr.elementType === "monthCells") {
@@ -279,17 +291,24 @@ export default {
 
     },
 
+    onDateChange(ev) {
+      // console.log(ev)
+    },
     onCellClick(event) {
 
-      if (!event.isAllDay ) {
+      if (!event.isAllDay) {
         // this.eventSettings.dataSource.find((el) => new Date(el.StartTime).toString() === start.toString())
         this.noteModalState = {show: false}
         this.modalState = {
           show: true,
           title: "Запись клиента",
-          start: event.startTime ?event.startTime : event.start
+          start: event.startTime ? event.startTime : event.start
         };
       }
+    },
+    formatDateToSend(inner) {
+      let date = new Date(inner)
+      return date.getFullYear() + "-" + (1 + date.getMonth()) + "-" + date.getDate() + 'T' + (date.getHours() < 10 ? '0' + date.getHours() : date.getHours()) + ':' + (date.getMinutes() < 10 ? '0' + date.getMinutes() : date.getMinutes()) + ':' + (date.getSeconds() < 10 ? '0' + date.getSeconds() : date.getSeconds()) + '';
     },
     onDoubleCellClick(event) {
 
@@ -299,21 +318,56 @@ export default {
         this.noteModalState = {
           show: true,
           title: "Добавить заметку",
-          start:  event.startTime ?event.startTime : event.start
+          start: event.startTime ? event.startTime : event.start
         };
       }
     },
+    async onDrag(ev) {
+      let oldData = JSON.parse(JSON.stringify(ev.data))
+
+      let payload = {
+        type: 'event',
+        id: ev.data.Id,
+        salon: this.$store.state.salon,
+        start: this.formatDateToSend(ev.data.StartTime),
+        finish: this.formatDateToSend(ev.data.EndTime),
+        service: ev.data.service.map((el) => el.id),
+        client: ev.data.client,
+        master: ev.data.master,
+        pet: ev.data.pet,
+        comment: ev.data.comment,
+        price: ev.data.price,
+        // isAssistentNeeded: this.isAssistentNeeded,
+      }
+
+      await this.$axios.post(window.serverUrl + 'ajax/?controller=GroomingCalendar&action=editEvent&ishook=y', payload).then((response) => {
+        if (!response || !response.data || response.data.error) {
+          this.$store.commit("deleteElem", payload.Id);
+          oldData.StartTime = oldData.start
+          oldData.EndTime = oldData.finish
+          this.deleteEvent(oldData)
+          this.$store.commit("addEvent", oldData);
+          this.addEvent(oldData)
+        } else {
+          this.$store.commit("deleteElem", payload.Id);
+          this.deleteEvent(oldData)
+          this.$store.commit("addEvent", oldData);
+          this.addEvent(oldData)
+        }
+      })
+
+
+    },
     onEventClick(ev) {
 
-      if(ev.event.type === 'event'){
+      if (ev.event.type === 'event') {
         this.modalState = {
           show: true,
           title: "Подробности",
           date: ev.event.StartTime,
           ...ev.event
         };
-      }
-      else if(ev.event.type === 'note'){
+      } else if (ev.event.type === 'note') {
         this.noteModalState = {
           show: true,
           title: "Заметка",

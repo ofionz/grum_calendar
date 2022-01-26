@@ -15,9 +15,12 @@ if((window.location.href.indexOf('localhost') + 1)) {
 else if (window.location.href.indexOf('devb24.abcgrooming.ru') + 1) {
   window.serverUrl  = 'https://devb24.abcgrooming.ru/';
 }
-else {
+else if (window.location.href.indexOf('b24.abcgrooming.ru') + 1)  {
   Vue.prototype.$production = true;
   window.serverUrl  = 'https://b24.abcgrooming.ru/';
+}
+else {
+  console.log('Ошибка расположения!')
 }
 
 new Vue({
